@@ -1,771 +1,773 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cycle Tech Meter Ultimate V2</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cycle Tech Cinema</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    /* === Base Styles & Variables === */
+    :root {
+      /* Colors */
+      --bg-color: #0f0f0f;
+      --header-bg: #1f1f1f;
+      --panel-bg: rgba(20, 20, 20, 0.85);
+      --text-color: #ffffff;
+      --accent-color: #00ffcc; /* Meter Accent */
+      --video-accent: #2196F3; /* Video Accent */
+      --danger-color: #ff3333;
+      
+      /* Layout */
+      --header-height: 56px;
+      --meter-height: 380px; /* PCでのメーター高さ */
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* === Header (Global Controls) === */
+    header {
+      height: var(--header-height);
+      padding: 0 15px;
+      background: var(--header-bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+      z-index: 100;
+    }
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    h1 { margin: 0; font-size: 16px; font-weight: bold; color: var(--accent-color); letter-spacing: 1px; }
+    
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
 
-    <style>
-        :root {
-            /* 変数 */
-            --clock-color: #ffffff;
-            --meter-color: #00ffcc;
-            
-            /* 固定色 */
-            --bg-color: #000000;
-            --panel-bg: rgba(20, 20, 20, 0.85);
-            --text-color: #ffffff;
-            --danger-color: #ff3333;
-        }
+    .btn-header {
+      background: #333; border: 1px solid #444; color: #eee;
+      padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 5px; transition: 0.2s;
+    }
+    .btn-header:hover { background: #444; }
+    
+    /* File Input hidden wrapper */
+    .file-input-wrapper { position: relative; overflow: hidden; display: inline-block; }
+    .file-input-wrapper input[type=file] {
+      position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
 
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100dvh;
-            background-color: var(--bg-color);
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: var(--text-color);
-            overflow: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
+    /* === Main Layout Container === */
+    #main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto; /* 縦スクロール許可 */
+      position: relative;
+    }
 
-        #app {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
+    /* === METER SECTION === */
+    #meter-section {
+      width: 100%;
+      min-height: var(--meter-height);
+      position: relative;
+      background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 2px solid #333;
+      flex-shrink: 0;
+    }
 
-        /* --- 上部バー --- */
-        #top-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 15px;
-            box-sizing: border-box;
-            display: flex;
-            justify-content: space-between;
-            z-index: 2000;
-            pointer-events: none;
-        }
+    /* Meter Elements (imported from Meter V2) */
+    #clock {
+      position: absolute; top: 10px; right: 20px;
+      font-size: 1.5rem; color: #fff; font-weight: 300;
+      font-variant-numeric: tabular-nums;
+    }
 
-        .icon-btn {
-            background: rgba(50, 50, 50, 0.6);
-            border: 1px solid #666;
-            color: #fff;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.2rem;
-            cursor: pointer;
-            pointer-events: auto;
-            backdrop-filter: blur(4px);
-        }
+    #gauge-wrapper {
+      position: relative; width: 280px; height: 280px;
+      display: flex; justify-content: center; align-items: center;
+      margin-top: 10px;
+    }
+    
+    svg.gauge-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; }
+    .gauge-track { fill: none; stroke: #222; stroke-width: 18; stroke-linecap: round; }
+    
+    #gauge-needle {
+      position: absolute; width: 6px; height: 50%; 
+      background: transparent; bottom: 50%; left: 50%;
+      transform-origin: bottom center; transform: rotate(-135deg);
+      transition: transform 0.1s cubic-bezier(0.1, 0, 0.3, 1);
+      z-index: 2; pointer-events: none;
+    }
+    #gauge-needle::after {
+      content: ''; position: absolute; top: 15px; left: -2px;
+      width: 10px; height: 40px; background: var(--accent-color);
+      border-radius: 5px; box-shadow: 0 0 15px var(--accent-color);
+    }
+    
+    #digital-inner {
+      position: absolute; z-index: 3; text-align: center;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      width: 60%; height: 60%; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 80%);
+    }
+    #speed-val { font-size: 4.5rem; font-weight: bold; line-height: 0.9; color: var(--accent-color); font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+    #speed-unit { font-size: 0.9rem; color: #888; font-weight: bold; margin-top: 5px; }
+    .gauge-tick-label { position: absolute; font-size: 0.9rem; color: #666; font-weight: bold; transform: translate(-50%, -50%); pointer-events: none; }
 
-        /* --- メーターエリア --- */
-        #meter-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            z-index: 10;
-            background: var(--bg-color);
-            transition: opacity 0.3s;
-            padding-bottom: 60px;
-            box-sizing: border-box;
-        }
+    /* Stats Grid */
+    #stats-panel {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 10px; width: 95%; max-width: 800px;
+      background: rgba(40,40,40,0.4); border-radius: 10px;
+      padding: 10px; margin-bottom: 10px; backdrop-filter: blur(5px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .stat-box { text-align: center; }
+    .stat-label { font-size: 0.65rem; color: #aaa; display: block; margin-bottom: 2px; }
+    .stat-value { font-size: 1.1rem; font-weight: bold; color: #fff; font-variant-numeric: tabular-nums; }
+    .stat-unit { font-size: 0.6rem; color: #888; }
+    
+    /* Map Overlay (Hidden by default) */
+    #map-view {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 5; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+    }
+    #meter-section.map-active #map-view { opacity: 1; pointer-events: auto; }
+    #meter-section.map-active #gauge-wrapper,
+    #meter-section.map-active #stats-panel { opacity: 0; pointer-events: none; }
 
-        /* 時計 */
-        #clock {
-            font-size: 3.5rem;
-            font-weight: 300;
-            color: var(--clock-color);
-            margin-bottom: 10px;
-            font-variant-numeric: tabular-nums;
-            z-index: 5;
-            text-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
+    .meter-toggle-btn {
+      position: absolute; bottom: 10px; right: 10px; z-index: 10;
+      background: rgba(0,0,0,0.7); color: var(--accent-color);
+      border: 1px solid var(--accent-color); padding: 5px 15px;
+      font-size: 0.8rem; cursor: pointer; border-radius: 20px;
+    }
 
-        /* --- アナログ・デジタル融合メーター --- */
-        #gauge-wrapper {
-            position: relative;
-            width: 320px; /* 少し調整 */
-            height: 320px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 10px;
-        }
+    /* === VIDEO SECTION === */
+    #video-section {
+      flex: 1;
+      display: flex;
+      flex-direction: row; /* 横並び (PC) */
+      min-height: 0;
+      background: #121212;
+    }
 
-        svg.gauge-bg {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            overflow: visible;
-        }
-        
-        .gauge-track {
-            fill: none;
-            stroke: #222;
-            stroke-width: 18;
-            stroke-linecap: round;
-        }
+    /* Video Player Area */
+    .player-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #000;
+      position: relative;
+    }
+    .video-wrapper {
+      flex: 1;
+      width: 100%;
+      background: #000;
+      position: relative;
+    }
+    iframe, video { width: 100%; height: 100%; border: none; position: absolute; top:0; left:0; }
 
-        #gauge-needle {
-            position: absolute;
-            width: 6px;
-            height: 50%; 
-            background: transparent;
-            bottom: 50%;
-            left: 50%;
-            transform-origin: bottom center;
-            transform: rotate(-135deg);
-            transition: transform 0.1s cubic-bezier(0.1, 0, 0.3, 1);
-            z-index: 2;
-            pointer-events: none;
-        }
-        
-        #gauge-needle::after {
-            content: '';
-            position: absolute;
-            top: 15px;
-            left: -2px;
-            width: 10px;
-            height: 40px;
-            background: var(--meter-color);
-            border-radius: 5px;
-            box-shadow: 0 0 15px var(--meter-color);
-        }
+    /* Controls Bar */
+    .video-controls {
+      height: 50px;
+      background: #181818;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      border-top: 1px solid #333;
+    }
+    .btn-ctrl {
+      background: transparent; border: none;
+      color: #fff; font-size: 20px; cursor: pointer;
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-ctrl:hover { background: rgba(255,255,255,0.1); }
 
-        #digital-inner {
-            position: absolute;
-            z-index: 3;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            width: 60%;
-            height: 60%;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 80%);
-        }
+    /* Playlist Sidebar */
+    .playlist-sidebar {
+      width: 320px;
+      background: #121212;
+      border-left: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
 
-        #speed-val {
-            font-size: 5.5rem;
-            font-weight: bold;
-            line-height: 0.9;
-            color: var(--meter-color);
-            font-variant-numeric: tabular-nums;
-            letter-spacing: -2px;
-        }
+    .playlist-filter { padding: 10px; border-bottom: 1px solid #333; background: #181818; display:flex; gap:5px; flex-direction: column;}
+    #folderSelect { width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 13px; }
+    .nico-toggle { font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 5px; cursor: pointer;}
 
-        #speed-unit {
-            font-size: 1.1rem;
-            color: #888;
-            margin-top: 5px;
-            font-weight: bold;
-        }
+    #playlist-content { flex: 1; overflow-y: auto; }
+    
+    .list-item {
+      display: flex; gap: 10px; padding: 8px 10px;
+      cursor: pointer; transition: background 0.1s;
+      border-left: 3px solid transparent; border-bottom: 1px solid #222;
+    }
+    .list-item:hover { background: #1e1e1e; }
+    .list-item.active { background: #252525; border-left-color: var(--video-accent); }
+    .list-item.active .list-title { color: var(--video-accent); }
 
-        .gauge-tick-label {
-            position: absolute;
-            font-size: 1rem;
-            color: #666;
-            font-weight: bold;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-        }
+    .list-thumb-box { position: relative; width: 100px; height: 56px; flex-shrink: 0; }
+    .list-thumb { width: 100%; height: 100%; object-fit: cover; background: #333; border-radius: 4px; }
+    .playing-overlay {
+      display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); align-items: center; justify-content: center; color: #fff; font-size: 12px;
+    }
+    .list-item.active .playing-overlay { display: flex; }
 
-        /* --- 統計情報パネル (Gridレイアウト) --- */
-        #stats-panel {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px 5px;
-            width: 95%;
-            max-width: 500px;
-            background: rgba(40, 40, 40, 0.4);
-            border-radius: 20px;
-            padding: 15px 10px;
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255,255,255,0.1);
-            box-sizing: border-box;
-        }
+    .list-info { flex: 1; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+    .list-title { font-size: 13px; font-weight: 500; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .list-meta { font-size: 10px; color: #888; display: flex; justify-content: space-between; }
 
-        .stat-box { text-align: center; }
-        .stat-label { font-size: 0.7rem; color: #aaa; display: block; margin-bottom: 2px; letter-spacing: 1px;}
-        .stat-value { font-size: 1.3rem; font-weight: bold; color: #fff; font-variant-numeric: tabular-nums;}
-        .stat-unit { font-size: 0.7rem; color: #aaa; margin-left: 2px; }
+    /* === Modals === */
+    #settings-modal, #start-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.9); z-index: 2000;
+      display: none; justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background: #1a1a1a; padding: 20px; border-radius: 10px;
+      width: 90%; max-width: 350px; border: 1px solid #444;
+    }
+    .modal-title { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; }
+    
+    .setting-row { margin-bottom: 15px; }
+    .setting-row label { display: block; margin-bottom: 5px; color: #ccc; font-size: 0.9rem; }
+    .setting-row input[type="number"] { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
+    
+    .btn-action { width: 100%; padding: 10px; margin-top: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-close { background: #555; color: #fff; margin-top: 15px; }
+    .btn-start { background: var(--video-accent); color: #fff; font-size: 1.2rem; padding: 15px 40px; border-radius: 50px; }
 
-        /* ステータスフッター (GPS精度など) */
-        #status-footer {
-            margin-top: 10px;
-            font-size: 0.8rem;
-            color: #666;
-        }
-
-        /* --- 地図 --- */
-        #map-view {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 1; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s;
-        }
-        body.map-active #map-view { opacity: 1; pointer-events: auto; z-index: 20; }
-        body.map-active #meter-container { display: none; }
-
-        /* --- 下部ボタン --- */
-        #bottom-controls {
-            position: absolute;
-            bottom: 30px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            z-index: 3000;
-            pointer-events: none;
-        }
-
-        #toggle-btn {
-            background-color: rgba(30, 30, 30, 0.9);
-            color: var(--meter-color);
-            border: 2px solid var(--meter-color);
-            border-radius: 50px;
-            padding: 12px 50px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            cursor: pointer;
-            pointer-events: auto;
-            box-shadow: 0 0 20px rgba(0,0,0,0.6);
-            transition: transform 0.1s;
-        }
-        #toggle-btn:active { transform: scale(0.95); }
-
-        /* --- 設定モーダル --- */
-        #settings-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 4000;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .settings-content {
-            background: #1a1a1a;
-            padding: 25px;
-            border-radius: 15px;
-            width: 100%;
-            max-width: 350px;
-            max-height: 90vh;
-            overflow-y: auto;
-            border: 1px solid #333;
-        }
-        h2 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; color: #fff; }
-        .setting-row { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #ddd; font-size: 0.95rem; }
-        
-        .color-picker-wrapper { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 10px; border-radius: 8px;}
-        input[type="color"] { border: none; width: 40px; height: 30px; background: none; cursor: pointer; }
-        
-        input[type="number"], select { 
-            width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 8px; font-size: 1rem; box-sizing: border-box;
-        }
-        
-        /* スイッチトグル */
-        .switch-wrapper { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 12px; border-radius: 8px;}
-        .toggle-switch {
-            position: relative; display: inline-block; width: 50px; height: 26px;
-        }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #555; transition: .4s; border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute; content: ""; height: 20px; width: 20px;
-            left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;
-        }
-        input:checked + .slider { background-color: var(--meter-color); }
-        input:checked + .slider:before { transform: translateX(24px); }
-
-        button.action-btn {
-            width: 100%; padding: 14px; margin-top: 10px;
-            border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem;
-        }
-        .btn-reset { background: #444; color: #ccc; }
-        .btn-danger { background: #600; color: #ffaaaa; margin-top: 5px;}
-        .btn-close { background: var(--meter-color); color: #000; margin-top: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-
-        /* スタイル制御 */
-        .hide-analog #gauge-wrapper svg, 
-        .hide-analog #gauge-wrapper #gauge-needle,
-        .hide-analog #gauge-wrapper .gauge-tick-label { display: none; }
-        .hide-digital #digital-inner { display: none; }
-
-    </style>
+    /* === Responsive === */
+    @media (max-width: 900px) {
+      /* Stack layout vertically */
+      #main-container { overflow-y: auto; }
+      
+      #meter-section { min-height: 320px; flex-shrink: 0; }
+      #stats-panel { grid-template-columns: repeat(3, 1fr); gap: 10px 5px; }
+      
+      #video-section { flex-direction: column; height: auto; flex: 0; }
+      .video-wrapper { aspect-ratio: 16/9; }
+      .playlist-sidebar { width: 100%; height: 300px; border-left: none; border-top: 1px solid #333; }
+      
+      .header-controls span { display: none; } /* Hide text labels on small screens */
+    }
+  </style>
 </head>
 <body>
 
-<div id="app">
-    <!-- 上部バー -->
-    <div id="top-bar">
-        <button id="btn-settings" class="icon-btn">⚙️</button>
-        <button id="btn-fullscreen" class="icon-btn">⛶</button>
+  <!-- HEADER -->
+  <header>
+    <h1>CYCLE TECH CINEMA</h1>
+    <div class="header-controls">
+      <div class="file-input-wrapper">
+        <button class="btn-header">📂 <span>Load JSON</span></button>
+        <input type="file" id="fileInput" accept=".json">
+      </div>
+      <button class="btn-header" id="btn-settings">⚙️ <span>Settings</span></button>
+      <button class="btn-header" id="btn-fullscreen">⛶</button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div id="main-container">
+    
+    <!-- METER SECTION -->
+    <div id="meter-section">
+      <div id="clock">--:--</div>
+      
+      <div id="gauge-wrapper">
+        <svg class="gauge-bg" viewBox="0 0 200 200">
+          <path class="gauge-track" d="M 40 160 A 85 85 0 1 1 160 160" fill="none" />
+        </svg>
+        <div id="gauge-ticks"></div>
+        <div id="gauge-needle"></div>
+        <div id="digital-inner">
+          <span id="speed-val">0.0</span>
+          <span id="speed-unit">km/h</span>
+        </div>
+      </div>
+
+      <div id="stats-panel">
+        <div class="stat-box"><span class="stat-label">DIST</span><span class="stat-value" id="dist-val">0.00</span><span class="stat-unit">km</span></div>
+        <div class="stat-box"><span class="stat-label">TIME</span><span class="stat-value" id="time-val">00:00</span><span class="stat-unit"></span></div>
+        <div class="stat-box"><span class="stat-label">KCAL</span><span class="stat-value" id="kcal-val">0</span><span class="stat-unit">kcal</span></div>
+        <div class="stat-box"><span class="stat-label">AVG</span><span class="stat-value" id="avg-val">0.0</span><span class="stat-unit">km/h</span></div>
+        <div class="stat-box"><span class="stat-label">MAX</span><span class="stat-value" id="max-val">0.0</span><span class="stat-unit">km/h</span></div>
+        <div class="stat-box"><span class="stat-label">ALT</span><span class="stat-value" id="alt-val">--</span><span class="stat-unit">m</span></div>
+      </div>
+
+      <div id="map-view"></div>
+      <button class="meter-toggle-btn" id="btn-map-toggle">Show MAP</button>
     </div>
 
-    <!-- メーター画面 -->
-    <div id="meter-container">
-        
-        <!-- 時計 -->
-        <div id="clock">--:--</div>
-
-        <!-- 融合メーター -->
-        <div id="gauge-wrapper">
-            <svg class="gauge-bg" viewBox="0 0 200 200">
-                <path class="gauge-track" d="M 40 160 A 85 85 0 1 1 160 160" fill="none" />
-            </svg>
-            <div id="gauge-ticks"></div>
-            <div id="gauge-needle"></div>
-            <div id="digital-inner">
-                <span id="speed-val">0.0</span>
-                <span id="speed-unit">km/h</span>
-            </div>
+    <!-- VIDEO SECTION -->
+    <div id="video-section">
+      <div class="player-area">
+        <div class="video-wrapper">
+          <div id="player-container"></div>
         </div>
-
-        <!-- データパネル (6項目) -->
-        <div id="stats-panel">
-            <div class="stat-box">
-                <span class="stat-label">DIST</span>
-                <span class="stat-value" id="dist-val">0.00</span>
-                <span class="stat-unit">km</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">TIME</span>
-                <span class="stat-value" id="time-val">00:00</span>
-                <span class="stat-unit"></span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">KCAL</span>
-                <span class="stat-value" id="kcal-val">0</span>
-                <span class="stat-unit">kcal</span>
-            </div>
-            
-            <!-- 2段目 -->
-            <div class="stat-box">
-                <span class="stat-label">AVG</span>
-                <span class="stat-value" id="avg-val">0.0</span>
-                <span class="stat-unit">km/h</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">MAX</span>
-                <span class="stat-value" id="max-val">0.0</span>
-                <span class="stat-unit">km/h</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">ALT</span>
-                <span class="stat-value" id="alt-val">--</span>
-                <span class="stat-unit">m</span>
-            </div>
+        <div class="video-controls">
+          <button class="btn-ctrl" id="btnPrev">⏮</button>
+          <button class="btn-ctrl" id="btnNext">⏭</button>
         </div>
+      </div>
 
-        <!-- ステータスフッター -->
-        <div id="status-footer">GPS Accuracy: <span id="acc-val">--</span> m</div>
+      <div class="playlist-sidebar">
+        <div class="playlist-filter">
+          <select id="folderSelect">
+            <option value="__ALL__">📚 すべての動画</option>
+          </select>
+          <label class="nico-toggle">
+            <input type="checkbox" id="excludeNicoCheck"> ニコニコを除外
+          </label>
+        </div>
+        <div id="playlist-content">
+          <div style="padding:40px 20px; text-align:center; color:#666; font-size:13px;">
+            JSONファイルを読み込んでください
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 地図画面 -->
-    <div id="map-view"></div>
+  </div>
 
-    <!-- 下部切り替え -->
-    <div id="bottom-controls">
-        <button id="toggle-btn">MAP</button>
+  <!-- OVERLAYS -->
+  <div id="start-overlay">
+    <button class="btn-start" id="btnUserStart">START</button>
+  </div>
+
+  <div id="settings-modal">
+    <div class="modal-content">
+      <h2 class="modal-title">Settings</h2>
+      <div class="setting-row">
+        <label>体重 (kg) <small>カロリー計算用</small></label>
+        <input type="number" id="input-weight" value="60" min="30">
+      </div>
+      <div class="setting-row">
+        <button class="btn-action" style="background:#444; color:#ccc;" id="btn-reset-dist">走行データリセット</button>
+      </div>
+      <button class="btn-action btn-close" id="btn-close-settings">閉じる</button>
     </div>
-</div>
+  </div>
 
-<!-- 設定モーダル -->
-<div id="settings-modal">
-    <div class="settings-content">
-        <h2>Settings</h2>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- YouTube API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
 
-        <div class="setting-row">
-            <label>表示設定</label>
-            <div class="switch-wrapper">
-                <span>時計の秒数を表示</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="input-show-seconds">
-                    <span class="slider"></span>
-                </label>
-            </div>
-        </div>
-
-        <div class="setting-row">
-            <label>体重 (kg) <small style="color:#888;">※カロリー計算用</small></label>
-            <input type="number" id="input-weight" value="60" min="30" max="150">
-        </div>
-
-        <div class="setting-row">
-            <label>時計の色</label>
-            <div class="color-picker-wrapper">
-                <span>Clock Color</span>
-                <input type="color" id="input-clock-color" value="#ffffff">
-            </div>
-        </div>
-
-        <div class="setting-row">
-            <label>メーターの色</label>
-            <div class="color-picker-wrapper">
-                <span>Meter Color</span>
-                <input type="color" id="input-meter-color" value="#00ffcc">
-            </div>
-        </div>
-
-        <div class="setting-row">
-            <label>表示スタイル</label>
-            <select id="input-style">
-                <option value="hybrid">ハイブリッド (針 + 数字)</option>
-                <option value="analog">アナログのみ (針)</option>
-                <option value="digital">デジタルのみ (数字)</option>
-            </select>
-        </div>
-
-        <div class="setting-row">
-            <label>メーター上限 (km/h)</label>
-            <input type="number" id="input-scale" value="40" min="10" max="300">
-        </div>
-
-        <div class="setting-row">
-            <button class="action-btn btn-reset" id="btn-reset-max">最高速度リセット</button>
-            <button class="action-btn btn-reset" id="btn-reset-dist">走行データリセット</button>
-            <button class="action-btn btn-danger" id="btn-reset-all">初期化 (全データ消去)</button>
-        </div>
-
-        <button class="action-btn btn-close" id="btn-close-settings">閉じる</button>
-    </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-    const els = {
-        speed: document.getElementById('speed-val'),
-        clock: document.getElementById('clock'),
-        needle: document.getElementById('gauge-needle'),
-        dist: document.getElementById('dist-val'),
-        max: document.getElementById('max-val'),
-        acc: document.getElementById('acc-val'),
-        
-        time: document.getElementById('time-val'),
-        alt: document.getElementById('alt-val'),
-        kcal: document.getElementById('kcal-val'),
-        avg: document.getElementById('avg-val'),
-
-        ticks: document.getElementById('gauge-ticks'),
-        meterContainer: document.getElementById('meter-container'),
-        modal: document.getElementById('settings-modal'),
-        
-        inputClockColor: document.getElementById('input-clock-color'),
-        inputMeterColor: document.getElementById('input-meter-color'),
-        inputStyle: document.getElementById('input-style'),
-        inputScale: document.getElementById('input-scale'),
-        inputWeight: document.getElementById('input-weight'),
-        inputShowSeconds: document.getElementById('input-show-seconds'),
+  <script>
+    /* =========================================
+       GLOBAL STATE & UTILS
+       ========================================= */
+    let wakeLock = null;
+    
+    // --- Meter State ---
+    const meterState = {
+      currentSpeed: 0,
+      maxSpeed: 0,
+      distance: 0,
+      movingTime: 0,
+      calories: 0,
+      currentAlt: null,
+      userWeight: 60,
+      meterMax: 40,
+      lastLat: null, lastLng: null,
+      mapMode: false
     };
+    
+    // --- Player State ---
+    let allMediaItems = [];
+    let currentPlaylist = [];
+    let currentIndex = 0;
+    let ytPlayer = null;
 
-    let state = {
-        currentSpeed: 0,
-        maxSpeed: 0,
-        distance: 0,
-        movingTime: 0, 
-        calories: 0,
-        currentAlt: null,
-        userWeight: 60,
-        
-        // 設定
-        clockColor: '#ffffff',
-        meterColor: '#00ffcc',
-        meterMax: 40,
-        displayStyle: 'hybrid',
-        showSeconds: false,
-
-        lastLat: null,
-        lastLng: null,
-        mapMode: false,
+    // Wake Lock
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) { console.warn(err); }
+    }
+    
+    /* =========================================
+       METER LOGIC
+       ========================================= */
+    const els = {
+      speed: document.getElementById('speed-val'),
+      needle: document.getElementById('gauge-needle'),
+      ticks: document.getElementById('gauge-ticks'),
+      dist: document.getElementById('dist-val'),
+      time: document.getElementById('time-val'),
+      kcal: document.getElementById('kcal-val'),
+      avg: document.getElementById('avg-val'),
+      max: document.getElementById('max-val'),
+      alt: document.getElementById('alt-val'),
+      clock: document.getElementById('clock'),
+      meterSec: document.getElementById('meter-section'),
+      btnMap: document.getElementById('btn-map-toggle')
     };
 
     let map = null, marker = null;
-    let wakeLock = null;
 
-    // --- データ読み込み ---
-    function loadData() {
-        const saved = localStorage.getItem('cycle-meter-ultimate-v3');
-        if (saved) {
-            const data = JSON.parse(saved);
-            state = { ...state, ...data };
-        }
-        applySettings();
-        updateUI();
+    function initMeter() {
+      drawTicks();
+      setInterval(updateClock, 1000);
+      setInterval(tripTimer, 1000);
+      loadMeterData();
+      startTracking();
     }
 
-    function saveData() {
-        localStorage.setItem('cycle-meter-ultimate-v3', JSON.stringify({
-            maxSpeed: state.maxSpeed,
-            distance: state.distance,
-            movingTime: state.movingTime,
-            calories: state.calories,
-            userWeight: state.userWeight,
-            
-            clockColor: state.clockColor,
-            meterColor: state.meterColor,
-            meterMax: state.meterMax,
-            displayStyle: state.displayStyle,
-            showSeconds: state.showSeconds
-        }));
+    function loadMeterData() {
+      const saved = localStorage.getItem('cycle-tech-cinema-v1');
+      if (saved) {
+        const d = JSON.parse(saved);
+        meterState.maxSpeed = d.maxSpeed || 0;
+        meterState.distance = d.distance || 0;
+        meterState.movingTime = d.movingTime || 0;
+        meterState.calories = d.calories || 0;
+        meterState.userWeight = d.userWeight || 60;
+      }
+      document.getElementById('input-weight').value = meterState.userWeight;
+      updateMeterUI();
     }
 
-    function applySettings() {
-        document.documentElement.style.setProperty('--clock-color', state.clockColor);
-        document.documentElement.style.setProperty('--meter-color', state.meterColor);
-        
-        els.inputClockColor.value = state.clockColor;
-        els.inputMeterColor.value = state.meterColor;
-        els.inputScale.value = state.meterMax;
-        els.inputStyle.value = state.displayStyle;
-        els.inputWeight.value = state.userWeight;
-        els.inputShowSeconds.checked = state.showSeconds;
-
-        els.meterContainer.classList.remove('hide-analog', 'hide-digital');
-        if (state.displayStyle === 'analog') els.meterContainer.classList.add('hide-digital');
-        if (state.displayStyle === 'digital') els.meterContainer.classList.add('hide-analog');
-
-        drawTicks();
-        updateMeter(state.currentSpeed);
+    function saveMeterData() {
+      localStorage.setItem('cycle-tech-cinema-v1', JSON.stringify({
+        maxSpeed: meterState.maxSpeed,
+        distance: meterState.distance,
+        movingTime: meterState.movingTime,
+        calories: meterState.calories,
+        userWeight: meterState.userWeight
+      }));
     }
 
-    // --- 常時点灯 (Wake Lock) ---
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake Lock Active');
-            }
-        } catch (err) {
-            console.log('Wake Lock Error:', err);
-        }
-    }
-
-    // --- メーター描画 ---
     function drawTicks() {
-        els.ticks.innerHTML = '';
-        const max = parseInt(state.meterMax);
-        const step = max <= 30 ? 5 : (max <= 60 ? 10 : 20);
-        const startAngle = -135;
-        const totalAngle = 270;
-
-        for (let i = 0; i <= max; i += step) {
-            const el = document.createElement('div');
-            el.className = 'gauge-tick-label';
-            el.textContent = i;
-            
-            const angle = startAngle + (i / max) * totalAngle;
-            const rad = (angle - 90) * (Math.PI / 180);
-            
-            const radius = 110; 
-            const x = 160 + radius * Math.cos(rad);
-            const y = 160 + radius * Math.sin(rad);
-
-            el.style.left = `${x}px`;
-            el.style.top = `${y}px`;
-            els.ticks.appendChild(el);
-        }
+      els.ticks.innerHTML = '';
+      const max = 40; // Fixed scale for simplicity or dynamic
+      const step = 5;
+      for (let i = 0; i <= max; i += step) {
+        const el = document.createElement('div');
+        el.className = 'gauge-tick-label';
+        el.textContent = i;
+        const angle = -135 + (i / max) * 270;
+        const rad = (angle - 90) * (Math.PI / 180);
+        const radius = 95; 
+        el.style.left = `${140 + radius * Math.cos(rad)}px`;
+        el.style.top = `${140 + radius * Math.sin(rad)}px`;
+        els.ticks.appendChild(el);
+      }
     }
 
     function updateMeter(speed) {
-        els.speed.textContent = speed.toFixed(1);
-        const max = parseInt(state.meterMax);
-        let percent = speed / max;
-        if (percent > 1) percent = 1;
-        
-        const deg = -135 + (percent * 270);
-        els.needle.style.transform = `rotate(${deg}deg)`;
+      els.speed.textContent = speed.toFixed(1);
+      const max = 40;
+      let percent = speed / max;
+      if (percent > 1) percent = 1;
+      const deg = -135 + (percent * 270);
+      els.needle.style.transform = `rotate(${deg}deg)`;
     }
 
-    // --- ロジック系 ---
     function updateClock() {
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        
-        if (state.showSeconds) {
-            const s = String(now.getSeconds()).padStart(2, '0');
-            els.clock.textContent = `${h}:${m}:${s}`;
-        } else {
-            els.clock.textContent = `${h}:${m}`;
-        }
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      els.clock.textContent = `${h}:${m}`;
     }
 
-    // 1秒タイマー
     function tripTimer() {
-        if (state.currentSpeed >= 2.0) {
-            state.movingTime++;
-            
-            // カロリー計算 (簡易METs)
-            let mets = 4.0;
-            if (state.currentSpeed >= 15) mets = 6.0;
-            if (state.currentSpeed >= 20) mets = 8.0;
-            if (state.currentSpeed >= 30) mets = 10.0;
-            const kcalPerSec = (mets * state.userWeight) / 3600;
-            state.calories += kcalPerSec;
-        }
+      if (meterState.currentSpeed >= 2.0) {
+        meterState.movingTime++;
+        // Kcal Calculation
+        let mets = 4.0;
+        if (meterState.currentSpeed >= 15) mets = 6.0;
+        if (meterState.currentSpeed >= 20) mets = 8.0;
+        const kcalPerSec = (mets * meterState.userWeight) / 3600;
+        meterState.calories += kcalPerSec;
+        updateMeterUI();
+      }
     }
 
-    function formatTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    function updateMeterUI() {
+      els.dist.textContent = meterState.distance.toFixed(2);
+      els.max.textContent = meterState.maxSpeed.toFixed(1);
+      els.kcal.textContent = Math.floor(meterState.calories);
+      
+      const h = Math.floor(meterState.movingTime / 3600);
+      const m = Math.floor((meterState.movingTime % 3600) / 60);
+      const s = meterState.movingTime % 60;
+      els.time.textContent = `${h > 0 ? h+':' : ''}${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+      if (meterState.distance > 0 && meterState.movingTime > 0) {
+        els.avg.textContent = (meterState.distance / (meterState.movingTime / 3600)).toFixed(1);
+      }
+      
+      if (meterState.currentAlt !== null) els.alt.textContent = Math.round(meterState.currentAlt);
     }
 
     function calcDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; 
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
     }
 
     function startTracking() {
-        if (!navigator.geolocation) return;
+      if (!navigator.geolocation) return;
+      navigator.geolocation.watchPosition((pos) => {
+        const { latitude, longitude, speed, accuracy, altitude } = pos.coords;
+        let kmh = (speed || 0) * 3.6;
+        if (kmh < 1.0) kmh = 0;
         
-        navigator.geolocation.watchPosition((pos) => {
-            const { latitude, longitude, speed, accuracy, altitude } = pos.coords;
-            
-            let kmh = (speed || 0) * 3.6;
-            if (kmh < 1.0) kmh = 0;
-            
-            state.currentSpeed = kmh;
-            if (kmh > state.maxSpeed) state.maxSpeed = kmh;
-            state.currentAlt = altitude;
+        meterState.currentSpeed = kmh;
+        if (kmh > meterState.maxSpeed) meterState.maxSpeed = kmh;
+        meterState.currentAlt = altitude;
 
-            // 距離加算
-            if (state.lastLat !== null && accuracy < 50 && kmh > 2.0) {
-                const d = calcDistance(state.lastLat, state.lastLng, latitude, longitude);
-                if (d > 0.002 && d < 0.1) {
-                    state.distance += d;
-                }
-            }
+        if (meterState.lastLat !== null && accuracy < 50 && kmh > 2.0) {
+          const d = calcDistance(meterState.lastLat, meterState.lastLng, latitude, longitude);
+          if (d > 0.002 && d < 0.1) meterState.distance += d;
+        }
 
-            state.lastLat = latitude;
-            state.lastLng = longitude;
-            
-            saveData();
-            updateUI(accuracy);
+        meterState.lastLat = latitude;
+        meterState.lastLng = longitude;
+        
+        saveMeterData();
+        updateMeter(kmh);
+        updateMeterUI();
 
-            // 地図更新
-            if (map && marker) {
-                const ll = [latitude, longitude];
-                marker.setLatLng(ll);
-                if(state.mapMode) map.setView(ll);
-            }
-
-        }, (e) => console.warn(e), { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        // Map Update
+        if (meterState.mapMode && map) {
+          if(!marker) marker = L.marker([latitude, longitude]).addTo(map);
+          else marker.setLatLng([latitude, longitude]);
+          map.setView([latitude, longitude]);
+        }
+      }, null, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
     }
 
-    function updateUI(acc) {
-        updateMeter(state.currentSpeed);
-        els.dist.textContent = state.distance.toFixed(2);
-        els.max.textContent = state.maxSpeed.toFixed(1);
-        els.time.textContent = formatTime(state.movingTime);
-        els.kcal.textContent = Math.floor(state.calories);
-        
-        // 平均速度計算 (km / h)
-        if (state.distance > 0 && state.movingTime > 0) {
-            const hours = state.movingTime / 3600;
-            const avg = state.distance / hours;
-            els.avg.textContent = avg.toFixed(1);
+    /* =========================================
+       PLAYER LOGIC
+       ========================================= */
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const json = JSON.parse(ev.target.result);
+          // Handle both simple array and extension format
+          allMediaItems = Array.isArray(json) ? json : (json.mediaItems || []);
+          allMediaItems = allMediaItems.filter(i => i.site !== 'system');
+          
+          if (allMediaItems.length > 0) {
+            setupFolderSelect();
+            applyFilters();
+            // Show overlay if not already playing
+            document.getElementById('start-overlay').style.display = 'flex';
+          } else {
+            alert('動画データが見つかりません');
+          }
+        } catch (err) { alert('読み込みエラー'); }
+      };
+      reader.readAsText(file);
+    });
+
+    function setupFolderSelect() {
+      const folders = new Set();
+      allMediaItems.forEach(item => folders.add(item.folder || 'Manual'));
+      const select = document.getElementById('folderSelect');
+      select.innerHTML = '<option value="__ALL__">📚 すべての動画</option>';
+      Array.from(folders).sort().forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f; opt.innerText = `📁 ${f}`;
+        select.appendChild(opt);
+      });
+      select.onchange = applyFilters;
+    }
+
+    document.getElementById('excludeNicoCheck').addEventListener('change', applyFilters);
+
+    function applyFilters() {
+      const folderName = document.getElementById('folderSelect').value;
+      const excludeNico = document.getElementById('excludeNicoCheck').checked;
+      
+      let temp = allMediaItems;
+      if (folderName !== '__ALL__') temp = temp.filter(i => (i.folder || 'Manual') === folderName);
+      if (excludeNico) temp = temp.filter(i => i.site !== 'niconico');
+      
+      currentPlaylist = temp;
+      renderPlaylist();
+    }
+
+    function renderPlaylist() {
+      const container = document.getElementById('playlist-content');
+      container.innerHTML = '';
+      if (currentPlaylist.length === 0) {
+        container.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">動画がありません</div>';
+        return;
+      }
+      
+      currentPlaylist.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = `list-item ${index === currentIndex ? 'active' : ''}`;
+        div.innerHTML = `
+          <div class="list-thumb-box">
+            <img src="${item.thumbnail}" class="list-thumb" loading="lazy">
+            <div class="playing-overlay">▶</div>
+          </div>
+          <div class="list-info">
+            <div class="list-title">${item.title}</div>
+            <div class="list-meta"><span>${item.site}</span><span>${item.folder||'Manual'}</span></div>
+          </div>
+        `;
+        div.onclick = () => loadVideo(index);
+        container.appendChild(div);
+      });
+      
+      const active = container.querySelector('.active');
+      if(active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function loadVideo(index) {
+      if (index < 0 || index >= currentPlaylist.length) return;
+      currentIndex = index;
+      const item = currentPlaylist[index];
+      renderPlaylist();
+
+      const container = document.getElementById('player-container');
+      
+      if (item.site === 'youtube') {
+        const vid = getYouTubeId(item.url);
+        // Reuse YT player if exists
+        if (!ytPlayer || !container.querySelector('iframe')) {
+          container.innerHTML = '<div id="yt-player-mount"></div>';
+          ytPlayer = new YT.Player('yt-player-mount', {
+            height: '100%', width: '100%', videoId: vid,
+            playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 },
+            events: { 'onStateChange': onPlayerStateChange }
+          });
         } else {
-            els.avg.textContent = "0.0";
+          ytPlayer.loadVideoById(vid);
         }
-
-        if (state.currentAlt !== null) els.alt.textContent = Math.round(state.currentAlt);
-        else els.alt.textContent = '--';
-
-        if(acc) els.acc.textContent = Math.round(acc);
+      } else {
+        if(ytPlayer) { ytPlayer.destroy(); ytPlayer = null; }
+        let html = '';
+        if (item.site === 'niconico') {
+           const nid = item.url.split('/').pop();
+           html = `<iframe src="https://embed.nicovideo.jp/watch/${nid}?jsapi=1&autoplay=1" allow="autoplay; fullscreen" style="width:100%;height:100%;border:none;"></iframe>`;
+        } else {
+           html = `<iframe src="${item.url}" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>`;
+        }
+        container.innerHTML = html;
+      }
     }
 
-    // --- イベントリスナー ---
-    els.inputClockColor.addEventListener('change', (e) => { state.clockColor = e.target.value; applySettings(); saveData(); });
-    els.inputMeterColor.addEventListener('change', (e) => { state.meterColor = e.target.value; applySettings(); saveData(); });
-    els.inputShowSeconds.addEventListener('change', (e) => { state.showSeconds = e.target.checked; updateClock(); saveData(); });
-    els.inputStyle.addEventListener('change', (e) => { state.displayStyle = e.target.value; applySettings(); saveData(); });
-    els.inputScale.addEventListener('change', (e) => { state.meterMax = e.target.value; applySettings(); saveData(); });
-    els.inputWeight.addEventListener('change', (e) => { state.userWeight = parseInt(e.target.value); saveData(); });
-
-    // リセットボタン系
-    document.getElementById('btn-reset-max').addEventListener('click', () => {
-        if(confirm('最高速度をリセットしますか？')) { state.maxSpeed = 0; saveData(); updateUI(); }
-    });
-    document.getElementById('btn-reset-dist').addEventListener('click', () => {
-        if(confirm('走行データをリセットしますか？(距離・時間・カロリー・平均)')) { 
-            state.distance = 0; state.movingTime = 0; state.calories = 0; saveData(); updateUI(); 
-        }
-    });
-    document.getElementById('btn-reset-all').addEventListener('click', () => {
-        if(confirm('完全に初期化しますか？')) { localStorage.removeItem('cycle-meter-ultimate-v3'); location.reload(); }
-    });
-
-    // モーダル・全画面
-    document.getElementById('btn-settings').addEventListener('click', () => els.modal.style.display = 'flex');
-    document.getElementById('btn-close-settings').addEventListener('click', () => els.modal.style.display = 'none');
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.ENDED) playNext();
+    }
     
-    // 全画面 + WakeLockトリガー
+    function getYouTubeId(url) {
+      try {
+        const u = new URL(url);
+        return u.searchParams.get('v') || url.split('/').pop();
+      } catch(e) { return ''; }
+    }
+    
+    function playNext() {
+      if(currentPlaylist.length === 0) return;
+      currentIndex = (currentIndex + 1) % currentPlaylist.length;
+      loadVideo(currentIndex);
+    }
+    function playPrev() {
+      if(currentPlaylist.length === 0) return;
+      currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
+      loadVideo(currentIndex);
+    }
+
+    document.getElementById('btnNext').onclick = playNext;
+    document.getElementById('btnPrev').onclick = playPrev;
+
+    /* =========================================
+       UI CONTROLS
+       ========================================= */
+    // Overlay Start
+    document.getElementById('btnUserStart').onclick = () => {
+      document.getElementById('start-overlay').style.display = 'none';
+      requestWakeLock();
+      if(currentPlaylist.length > 0) loadVideo(0);
+    };
+
+    // Map Toggle
+    els.btnMap.addEventListener('click', function() {
+      meterState.mapMode = !meterState.mapMode;
+      els.meterSec.classList.toggle('map-active', meterState.mapMode);
+      this.textContent = meterState.mapMode ? 'Hide MAP' : 'Show MAP';
+      
+      if (meterState.mapMode && !map) {
+        map = L.map('map-view', {zoomControl:false}).setView([35.6812, 139.7671], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OSM', maxZoom: 19
+        }).addTo(map);
+        if(meterState.lastLat) map.setView([meterState.lastLat, meterState.lastLng]);
+      }
+    });
+
+    // Fullscreen
     document.getElementById('btn-fullscreen').addEventListener('click', () => {
-        requestWakeLock(); // 全画面時に画面常時点灯をリクエスト
-        if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-        else document.exitFullscreen();
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+      else document.exitFullscreen();
     });
 
-    // マップ切替
-    document.getElementById('toggle-btn').addEventListener('click', function() {
-        state.mapMode = !state.mapMode;
-        if (state.mapMode) {
-            document.body.classList.add('map-active');
-            this.textContent = 'SPEED';
-            if (!map) {
-                map = L.map('map-view', {zoomControl:false}).setView([35.6812, 139.7671], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OSM', maxZoom: 19
-                }).addTo(map);
-                marker = L.marker([35.6812, 139.7671]).addTo(map);
-            }
-            setTimeout(() => { map.invalidateSize(); if(marker && state.lastLat) map.setView([state.lastLat, state.lastLng]); }, 100);
-        } else {
-            document.body.classList.remove('map-active');
-            this.textContent = 'MAP';
-        }
+    // Settings Modal
+    document.getElementById('btn-settings').addEventListener('click', () => {
+      document.getElementById('settings-modal').style.display = 'flex';
+    });
+    document.getElementById('btn-close-settings').addEventListener('click', () => {
+      document.getElementById('settings-modal').style.display = 'none';
     });
 
-    // 初期化
-    setInterval(updateClock, 1000);
-    setInterval(tripTimer, 1000);
-    updateClock();
-    loadData();
-    startTracking();
-    
-    // 初回タップ時にもWakeLockを試みる(ブラウザ制限対策)
-    document.addEventListener('click', requestWakeLock, { once: true });
+    // Reset Buttons
+    document.getElementById('btn-reset-dist').addEventListener('click', () => {
+      if(confirm('走行データをリセットしますか？')) {
+        meterState.distance = 0; meterState.movingTime = 0; meterState.calories = 0;
+        saveMeterData(); updateMeterUI();
+      }
+    });
+    document.getElementById('input-weight').addEventListener('change', (e) => {
+      meterState.userWeight = parseInt(e.target.value);
+      saveMeterData();
+    });
 
-</script>
+    // Initialization
+    initMeter();
+
+  </script>
 </body>
 </html>
