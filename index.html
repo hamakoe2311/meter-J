@@ -221,8 +221,12 @@
       flex-shrink: 0;
     }
 
-    .playlist-filter { padding: 10px; border-bottom: 1px solid #333; background: #181818; display:flex; gap:5px; flex-direction: column;}
-    #folderSelect { width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 13px; }
+    .playlist-filter { padding: 10px; border-bottom: 1px solid #333; background: #181818; display:flex; gap:8px; flex-direction: column;}
+    /* Inputs */
+    #folderSelect, #sortSelect { 
+      width: 100%; padding: 8px; background: #333; color: #fff; 
+      border: 1px solid #444; border-radius: 4px; font-size: 13px; 
+    }
     .nico-toggle { font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 5px; cursor: pointer;}
 
     #playlist-content { flex: 1; overflow-y: auto; }
@@ -355,8 +359,17 @@
 
       <div class="playlist-sidebar">
         <div class="playlist-filter">
+          <!-- フォルダ選択 -->
           <select id="folderSelect">
             <option value="__ALL__">📚 すべての動画</option>
+          </select>
+          <!-- ソート選択 -->
+          <select id="sortSelect">
+            <option value="custom">🔢 カスタム順</option>
+            <option value="newest">▼ 新しい順</option>
+            <option value="oldest">▲ 古い順</option>
+            <option value="title">🔤 名前順</option>
+            <option value="playCount">▶ 再生数順</option>
           </select>
           <label class="nico-toggle">
             <input type="checkbox" id="excludeNicoCheck"> ニコニコを除外
@@ -557,11 +570,6 @@
     }
 
     function applySettings() {
-      // Apply CSS Vars directly for dynamic colors
-      // Note: In strict CSP or some frameworks, this might need refinement, but works for standard HTML
-      // For needle color
-      const styleSheet = document.styleSheets[0];
-      // Instead of complex CSS manipulation, we use inline style or set properties on root if defined
       document.documentElement.style.setProperty('--accent-color', meterState.meterColor);
       
       els.clock.style.color = meterState.clockColor;
@@ -758,17 +766,44 @@
     }
 
     document.getElementById('excludeNicoCheck').addEventListener('change', applyFilters);
+    document.getElementById('sortSelect').addEventListener('change', applyFilters);
 
     function applyFilters() {
       const folderName = document.getElementById('folderSelect').value;
       const excludeNico = document.getElementById('excludeNicoCheck').checked;
+      const sortType = document.getElementById('sortSelect').value;
       
-      let temp = allMediaItems;
+      let temp = [...allMediaItems]; // Copy array
+      
+      // Filter
       if (folderName !== '__ALL__') temp = temp.filter(i => (i.folder || 'Manual') === folderName);
       if (excludeNico) temp = temp.filter(i => i.site !== 'niconico');
       
+      // Sort
+      sortItems(temp, sortType);
+      
       currentPlaylist = temp;
       renderPlaylist();
+    }
+
+    function sortItems(items, sortType) {
+      const getTime = (dateStr) => dateStr ? new Date(dateStr).getTime() : 0;
+      const safeStr = (s) => s || "";
+
+      items.sort((a, b) => {
+        if (sortType === 'custom') {
+          // Extension logic: order property or savedAt fallback
+          const oA = (typeof a.order === 'number') ? a.order : getTime(a.savedAt);
+          const oB = (typeof b.order === 'number') ? b.order : getTime(b.savedAt);
+          if (oA !== oB) return oA - oB;
+          return safeStr(a.id).localeCompare(safeStr(b.id));
+        }
+        if (sortType === 'newest') return getTime(b.savedAt) - getTime(a.savedAt);
+        if (sortType === 'oldest') return getTime(a.savedAt) - getTime(b.savedAt);
+        if (sortType === 'playCount') return (Number(b.playCount) || 0) - (Number(a.playCount) || 0);
+        if (sortType === 'title') return safeStr(a.title).localeCompare(safeStr(b.title), 'ja');
+        return 0;
+      });
     }
 
     function renderPlaylist() {
