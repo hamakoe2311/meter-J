@@ -162,6 +162,12 @@
       font-size: 0.8rem; cursor: pointer; border-radius: 20px;
     }
 
+    /* Styles control */
+    #meter-section.hide-analog #gauge-wrapper svg,
+    #meter-section.hide-analog #gauge-needle,
+    #meter-section.hide-analog .gauge-tick-label { display: none; }
+    #meter-section.hide-digital #digital-inner { display: none; }
+
     /* === VIDEO SECTION === */
     #video-section {
       flex: 1;
@@ -251,30 +257,40 @@
     .modal-content {
       background: #1a1a1a; padding: 20px; border-radius: 10px;
       width: 90%; max-width: 350px; border: 1px solid #444;
+      max-height: 90vh; overflow-y: auto;
     }
     .modal-title { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; }
     
     .setting-row { margin-bottom: 15px; }
     .setting-row label { display: block; margin-bottom: 5px; color: #ccc; font-size: 0.9rem; }
-    .setting-row input[type="number"] { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
+    .setting-row input[type="number"], .setting-row select { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box; }
     
+    .color-picker-wrapper { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 8px; border-radius: 4px; }
+    input[type="color"] { border: none; width: 40px; height: 30px; background: none; cursor: pointer; }
+
+    .switch-wrapper { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 8px; border-radius: 4px; }
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .4s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--accent-color); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
     .btn-action { width: 100%; padding: 10px; margin-top: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    .btn-close { background: #555; color: #fff; margin-top: 15px; }
+    .btn-reset { background: #444; color: #ccc; }
+    .btn-danger { background: #600; color: #ffaaaa; margin-top: 5px; }
+    .btn-close { background: var(--accent-color); color: #000; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .btn-start { background: var(--video-accent); color: #fff; font-size: 1.2rem; padding: 15px 40px; border-radius: 50px; }
 
     /* === Responsive === */
     @media (max-width: 900px) {
-      /* Stack layout vertically */
       #main-container { overflow-y: auto; }
-      
       #meter-section { min-height: 320px; flex-shrink: 0; }
       #stats-panel { grid-template-columns: repeat(3, 1fr); gap: 10px 5px; }
-      
       #video-section { flex-direction: column; height: auto; flex: 0; }
       .video-wrapper { aspect-ratio: 16/9; }
       .playlist-sidebar { width: 100%; height: 300px; border-left: none; border-top: 1px solid #333; }
-      
-      .header-controls span { display: none; } /* Hide text labels on small screens */
+      .header-controls span { display: none; }
     }
   </style>
 </head>
@@ -361,16 +377,63 @@
     <button class="btn-start" id="btnUserStart">START</button>
   </div>
 
+  <!-- SETTINGS MODAL -->
   <div id="settings-modal">
     <div class="modal-content">
       <h2 class="modal-title">Settings</h2>
+
+      <div class="setting-row">
+        <label>表示設定</label>
+        <div class="switch-wrapper">
+          <span style="font-size:0.9rem; color:#ccc;">時計の秒数を表示</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="input-show-seconds">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
       <div class="setting-row">
         <label>体重 (kg) <small>カロリー計算用</small></label>
         <input type="number" id="input-weight" value="60" min="30">
       </div>
+
       <div class="setting-row">
-        <button class="btn-action" style="background:#444; color:#ccc;" id="btn-reset-dist">走行データリセット</button>
+        <label>時計の色</label>
+        <div class="color-picker-wrapper">
+          <span style="font-size:0.9rem; color:#ccc;">Clock Color</span>
+          <input type="color" id="input-clock-color" value="#ffffff">
+        </div>
       </div>
+
+      <div class="setting-row">
+        <label>メーターの色</label>
+        <div class="color-picker-wrapper">
+          <span style="font-size:0.9rem; color:#ccc;">Meter Color</span>
+          <input type="color" id="input-meter-color" value="#00ffcc">
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label>表示スタイル</label>
+        <select id="input-style">
+          <option value="hybrid">ハイブリッド (針 + 数字)</option>
+          <option value="analog">アナログのみ (針)</option>
+          <option value="digital">デジタルのみ (数字)</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <label>メーター上限 (km/h)</label>
+        <input type="number" id="input-scale" value="40" min="10" max="300">
+      </div>
+
+      <div class="setting-row">
+        <button class="btn-action btn-reset" id="btn-reset-max">最高速度リセット</button>
+        <button class="btn-action btn-reset" id="btn-reset-dist">走行データリセット</button>
+        <button class="btn-action btn-danger" id="btn-reset-all">初期化 (全データ消去)</button>
+      </div>
+
       <button class="btn-action btn-close" id="btn-close-settings">閉じる</button>
     </div>
   </div>
@@ -395,7 +458,14 @@
       calories: 0,
       currentAlt: null,
       userWeight: 60,
+      
+      // Settings
+      clockColor: '#ffffff',
+      meterColor: '#00ffcc',
       meterMax: 40,
+      displayStyle: 'hybrid',
+      showSeconds: false,
+
       lastLat: null, lastLng: null,
       mapMode: false
     };
@@ -430,21 +500,28 @@
       alt: document.getElementById('alt-val'),
       clock: document.getElementById('clock'),
       meterSec: document.getElementById('meter-section'),
-      btnMap: document.getElementById('btn-map-toggle')
+      btnMap: document.getElementById('btn-map-toggle'),
+      
+      // Setting Inputs
+      inputClockColor: document.getElementById('input-clock-color'),
+      inputMeterColor: document.getElementById('input-meter-color'),
+      inputStyle: document.getElementById('input-style'),
+      inputScale: document.getElementById('input-scale'),
+      inputWeight: document.getElementById('input-weight'),
+      inputShowSeconds: document.getElementById('input-show-seconds')
     };
 
     let map = null, marker = null;
 
     function initMeter() {
-      drawTicks();
       setInterval(updateClock, 1000);
       setInterval(tripTimer, 1000);
-      loadMeterData();
+      loadMeterData(); // Load and Apply Settings
       startTracking();
     }
 
     function loadMeterData() {
-      const saved = localStorage.getItem('cycle-tech-cinema-v1');
+      const saved = localStorage.getItem('cycle-tech-cinema-v2');
       if (saved) {
         const d = JSON.parse(saved);
         meterState.maxSpeed = d.maxSpeed || 0;
@@ -452,25 +529,63 @@
         meterState.movingTime = d.movingTime || 0;
         meterState.calories = d.calories || 0;
         meterState.userWeight = d.userWeight || 60;
+        
+        meterState.clockColor = d.clockColor || '#ffffff';
+        meterState.meterColor = d.meterColor || '#00ffcc';
+        meterState.meterMax = d.meterMax || 40;
+        meterState.displayStyle = d.displayStyle || 'hybrid';
+        meterState.showSeconds = d.showSeconds || false;
       }
-      document.getElementById('input-weight').value = meterState.userWeight;
+      applySettings();
       updateMeterUI();
     }
 
     function saveMeterData() {
-      localStorage.setItem('cycle-tech-cinema-v1', JSON.stringify({
+      localStorage.setItem('cycle-tech-cinema-v2', JSON.stringify({
         maxSpeed: meterState.maxSpeed,
         distance: meterState.distance,
         movingTime: meterState.movingTime,
         calories: meterState.calories,
-        userWeight: meterState.userWeight
+        userWeight: meterState.userWeight,
+        
+        clockColor: meterState.clockColor,
+        meterColor: meterState.meterColor,
+        meterMax: meterState.meterMax,
+        displayStyle: meterState.displayStyle,
+        showSeconds: meterState.showSeconds
       }));
+    }
+
+    function applySettings() {
+      // Apply CSS Vars directly for dynamic colors
+      // Note: In strict CSP or some frameworks, this might need refinement, but works for standard HTML
+      // For needle color
+      const styleSheet = document.styleSheets[0];
+      // Instead of complex CSS manipulation, we use inline style or set properties on root if defined
+      document.documentElement.style.setProperty('--accent-color', meterState.meterColor);
+      
+      els.clock.style.color = meterState.clockColor;
+      els.inputClockColor.value = meterState.clockColor;
+      els.inputMeterColor.value = meterState.meterColor;
+      els.inputScale.value = meterState.meterMax;
+      els.inputStyle.value = meterState.displayStyle;
+      els.inputWeight.value = meterState.userWeight;
+      els.inputShowSeconds.checked = meterState.showSeconds;
+
+      // Style Toggle
+      els.meterSec.classList.remove('hide-analog', 'hide-digital');
+      if (meterState.displayStyle === 'analog') els.meterSec.classList.add('hide-digital');
+      if (meterState.displayStyle === 'digital') els.meterSec.classList.add('hide-analog');
+
+      drawTicks();
+      updateClock(); // Immediate update
     }
 
     function drawTicks() {
       els.ticks.innerHTML = '';
-      const max = 40; // Fixed scale for simplicity or dynamic
-      const step = 5;
+      const max = parseInt(meterState.meterMax);
+      const step = max <= 30 ? 5 : (max <= 60 ? 10 : 20);
+      
       for (let i = 0; i <= max; i += step) {
         const el = document.createElement('div');
         el.className = 'gauge-tick-label';
@@ -486,7 +601,7 @@
 
     function updateMeter(speed) {
       els.speed.textContent = speed.toFixed(1);
-      const max = 40;
+      const max = parseInt(meterState.meterMax);
       let percent = speed / max;
       if (percent > 1) percent = 1;
       const deg = -135 + (percent * 270);
@@ -497,7 +612,13 @@
       const now = new Date();
       const h = String(now.getHours()).padStart(2, '0');
       const m = String(now.getMinutes()).padStart(2, '0');
-      els.clock.textContent = `${h}:${m}`;
+      
+      if (meterState.showSeconds) {
+        const s = String(now.getSeconds()).padStart(2, '0');
+        els.clock.textContent = `${h}:${m}:${s}`;
+      } else {
+        els.clock.textContent = `${h}:${m}`;
+      }
     }
 
     function tripTimer() {
@@ -507,6 +628,7 @@
         let mets = 4.0;
         if (meterState.currentSpeed >= 15) mets = 6.0;
         if (meterState.currentSpeed >= 20) mets = 8.0;
+        if (meterState.currentSpeed >= 30) mets = 10.0;
         const kcalPerSec = (mets * meterState.userWeight) / 3600;
         meterState.calories += kcalPerSec;
         updateMeterUI();
@@ -571,6 +693,29 @@
         }
       }, null, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
     }
+
+    /* =========================================
+       SETTINGS EVENT LISTENERS
+       ========================================= */
+    els.inputClockColor.addEventListener('change', (e) => { meterState.clockColor = e.target.value; applySettings(); saveMeterData(); });
+    els.inputMeterColor.addEventListener('change', (e) => { meterState.meterColor = e.target.value; applySettings(); saveMeterData(); });
+    els.inputShowSeconds.addEventListener('change', (e) => { meterState.showSeconds = e.target.checked; updateClock(); saveMeterData(); });
+    els.inputStyle.addEventListener('change', (e) => { meterState.displayStyle = e.target.value; applySettings(); saveMeterData(); });
+    els.inputScale.addEventListener('change', (e) => { meterState.meterMax = e.target.value; applySettings(); saveMeterData(); });
+    els.inputWeight.addEventListener('change', (e) => { meterState.userWeight = parseInt(e.target.value); saveMeterData(); });
+
+    // Reset Buttons
+    document.getElementById('btn-reset-max').addEventListener('click', () => {
+      if(confirm('最高速度をリセットしますか？')) { meterState.maxSpeed = 0; saveMeterData(); updateMeterUI(); }
+    });
+    document.getElementById('btn-reset-dist').addEventListener('click', () => {
+      if(confirm('走行データをリセットしますか？(距離・時間・カロリー・平均)')) { 
+        meterState.distance = 0; meterState.movingTime = 0; meterState.calories = 0; saveMeterData(); updateMeterUI(); 
+      }
+    });
+    document.getElementById('btn-reset-all').addEventListener('click', () => {
+      if(confirm('完全に初期化しますか？')) { localStorage.removeItem('cycle-tech-cinema-v2'); location.reload(); }
+    });
 
     /* =========================================
        PLAYER LOGIC
@@ -751,18 +896,6 @@
     });
     document.getElementById('btn-close-settings').addEventListener('click', () => {
       document.getElementById('settings-modal').style.display = 'none';
-    });
-
-    // Reset Buttons
-    document.getElementById('btn-reset-dist').addEventListener('click', () => {
-      if(confirm('走行データをリセットしますか？')) {
-        meterState.distance = 0; meterState.movingTime = 0; meterState.calories = 0;
-        saveMeterData(); updateMeterUI();
-      }
-    });
-    document.getElementById('input-weight').addEventListener('change', (e) => {
-      meterState.userWeight = parseInt(e.target.value);
-      saveMeterData();
     });
 
     // Initialization
