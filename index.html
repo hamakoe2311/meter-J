@@ -229,7 +229,8 @@
     }
     .nico-toggle { font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 5px; cursor: pointer;}
 
-    #playlist-content { flex: 1; overflow-y: auto; }
+    /* 修正: relativeを追加して内部計算の基準にする */
+    #playlist-content { flex: 1; overflow-y: auto; position: relative; }
     
     .list-item {
       display: flex; gap: 10px; padding: 8px 10px;
@@ -832,7 +833,23 @@
       });
       
       const active = container.querySelector('.active');
-      if(active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if(active) {
+        // ★修正: scrollIntoViewを使わずにコンテナ内の相対位置でスクロール制御を行う
+        // これにより、Window全体のスクロールを防ぎ、リスト内だけで完結させる
+        const containerHeight = container.clientHeight;
+        const itemTop = active.offsetTop;
+        const itemHeight = active.offsetHeight;
+        const scrollTop = container.scrollTop;
+
+        // 項目が視界より上にある場合
+        if (itemTop < scrollTop) {
+          container.scrollTop = itemTop;
+        } 
+        // 項目が視界より下にある場合
+        else if (itemTop + itemHeight > scrollTop + containerHeight) {
+          container.scrollTop = itemTop + itemHeight - containerHeight;
+        }
+      }
     }
 
     function loadVideo(index) {
